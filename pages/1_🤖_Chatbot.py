@@ -1,5 +1,5 @@
 import streamlit as st
-from chatbot import get_interview_response, get_diagnosis
+from chatbot import get_interview_response
 
 st.title("🤖 Patient Interview Chatbot")
 
@@ -37,5 +37,4 @@ if not st.session_state.end_conversation:
 if st.button("End Interview"):
     st.session_state.end_conversation = True
     full_convo = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.conversation])
-    st.session_state.diagnosis = get_diagnosis(full_convo)
     st.success("Interview ended. Go to the Summary page.")
