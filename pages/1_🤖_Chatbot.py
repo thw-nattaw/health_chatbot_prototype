@@ -10,6 +10,8 @@ if "diagnosis" not in st.session_state:
     st.session_state.diagnosis = ""
 if "end_conversation" not in st.session_state:
     st.session_state.end_conversation = False
+if "i" not in st.session_state:
+    st.session_state.i = 0
 
 # Display previous messages
 for entry in st.session_state.conversation:
@@ -25,6 +27,9 @@ if not st.session_state.end_conversation:
         with st.chat_message("user"):
             st.markdown(user_input)
 
+        st.session_state.i = st.session_state.i + 1
+        print(st.session_state.i)
+        
         # Full context for LLM
         full_history = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.conversation])
         ai_response = get_interview_response(user_input, full_history)
