@@ -1,6 +1,5 @@
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableLambda, RunnableMap
 from langchain_core.output_parsers import StrOutputParser
 import time
 import re
@@ -28,9 +27,12 @@ Diagnosis refinement:
 8. Once you suspect a likely diagnosis, ask focused follow-up questions to support or challenge that hypothesis.
 9. Conclude the interview politely when the next step clearly requires physical exam or tests (e.g., bloodwork, imaging).
 
+
 **Important reminders**:
 - Do not stop at one plausible cause — collect enough information to confirm or rule out multiple potential diagnoses.
 - Always consider common, treatable, or serious conditions that may present subtly.
+- Please do not include any thought processes other than the question (例：「〜が考えられます」「〜の可能性があります」など）
+- Do not ask for information already answered.
 
 Patient Information:
 - 年齢: {age}歳
@@ -56,15 +58,22 @@ ALLOWED_ENGLISH_TERMS = {
 }
 
 def is_valid_japanese_question(output: str) -> bool:
-    # Extract English words using a stricter filter
-    english_words = re.findall(r'[A-Za-z]+', output)
+    # Extract ALL non-Japanese character tokens (including Latin, Cyrillic, etc.)
+    non_japanese_words = re.findall(r'[^\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]+', output)
+    
+    # Now extract actual alphanumeric "words" from those segments
+    foreign_words = []
+    for segment in non_japanese_words:
+        words = re.findall(r'\b[A-Za-z0-9]+\b', segment)
+        foreign_words.extend(words)
 
-    # Filter out allowed medical terms
-    non_whitelisted = [word for word in english_words if word not in ALLOWED_ENGLISH_TERMS]
+    # Filter out allowed English words
+    non_whitelisted = [w for w in foreign_words if w not in ALLOWED_ENGLISH_TERMS]
 
     if non_whitelisted:
-        print(f"[WARNING] 不許可の英語表現が含まれています: {non_whitelisted}")
+        print(f"[WARNING] 不許可の英語／非日本語表現が含まれています: {non_whitelisted}")
         return False
+
     return True
 
 
