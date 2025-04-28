@@ -17,22 +17,23 @@ Your diagnostic tasks:
 2. Collect detailed symptom information (onset, location, characteristics, severity, context, modifying factors).
 3. If the onset (in days/weeks/months/years) is unclear, ask about it first.
 4. Ask only one question at a time.
+5. If the condition is emergency and requires immediate treatment, for examples, suspecting stroke or myocardial infarction, ask only relevant questions quickly and end conversation.
 
 Diagnostic strategy:
-5. After exploring the main symptom, screen for relevant associated symptoms from **multiple organ systems** (e.g., cardiovascular, respiratory, hematologic, neurologic, endocrine, gynecologic) — especially those that may indicate serious or common etiologies.
-6. Explore potential causes systematically
-7. Only after sufficient symptom and etiology screening, ask about medical history, treatment, smoking, alcohol, and family history.
+6. After exploring the main symptom, screen for relevant associated symptoms from **multiple organ systems** (e.g., cardiovascular, respiratory, hematologic, neurologic, endocrine, gynecologic) — especially those that may indicate serious or common etiologies.
+7. Explore potential causes systematically. Also asks about external causes and injuries.
+8. Only after sufficient symptom and etiology screening, ask about medical history, treatment, smoking, alcohol, and family history.
 
 Diagnosis refinement:
-8. Once you suspect a likely diagnosis, ask focused follow-up questions to support or challenge that hypothesis.
-9. Conclude the interview politely when the next step clearly requires physical exam or tests (e.g., bloodwork, imaging).
+9. Once you suspect a likely diagnosis, ask focused follow-up questions to support or challenge that hypothesis.
+10. Conclude the interview politely when the next step clearly requires physical exam or tests (e.g., bloodwork, imaging).
 
 
 **Important reminders**:
 - Do not stop at one plausible cause — collect enough information to confirm or rule out multiple potential diagnoses.
 - Always consider common, treatable, or serious conditions that may present subtly.
 - Please do not include any thought processes other than the question (例：「〜が考えられます」「〜の可能性があります」など）
-- Do not ask for information already answered.
+- Avoid re-checking the same system multiple times unless there's a new angle.
 
 Patient Information:
 - 年齢: {age}歳
@@ -54,27 +55,43 @@ Conversation:
 {conversation_history}
 """
 ALLOWED_ENGLISH_TERMS = {
-    "COPD", "NSAIDs", "CT", "MRI"
+    "COPD", "NSAIDs", "CT", "MRI", "KG"
 }
 
+# Check if the token is purely Japanese
+def is_pure_japanese(token):
+    return all(re.match(r'[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', char) for char in token)
+
+# Check if token is whitelisted English
+def is_whitelisted_english(token):
+    return token in ALLOWED_ENGLISH_TERMS
+
+# Check if the token is purely numeric
+def is_numeric(token):
+    return token.isdigit()
+
 def is_valid_japanese_question(output: str) -> bool:
-    # Extract ALL non-Japanese character tokens (including Latin, Cyrillic, etc.)
-    non_japanese_words = re.findall(r'[^\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]+', output)
-    
-    # Now extract actual alphanumeric "words" from those segments
-    foreign_words = []
-    for segment in non_japanese_words:
-        words = re.findall(r'\b[A-Za-z0-9]+\b', segment)
-        foreign_words.extend(words)
+    # Split tokens by word boundaries
+    tokens = re.findall(r'\b\w+\b', output)
 
-    # Filter out allowed English words
-    non_whitelisted = [w for w in foreign_words if w not in ALLOWED_ENGLISH_TERMS]
+    invalid_tokens = []
 
-    if non_whitelisted:
-        print(f"[WARNING] 不許可の英語／非日本語表現が含まれています: {non_whitelisted}")
+    for token in tokens:
+        if is_pure_japanese(token):
+            continue
+        elif is_whitelisted_english(token):
+            continue
+        elif is_numeric(token):
+            continue
+        else:
+            invalid_tokens.append(token)
+
+    if invalid_tokens:
+        print(f"[WARNING] 不許可の英語／非日本語表現が含まれています: {invalid_tokens}")
         return False
 
     return True
+
 
 
 def get_interview_response(conversation_history, age=None, gender=None, max_retries=3):
