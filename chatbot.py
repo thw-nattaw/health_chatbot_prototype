@@ -59,38 +59,38 @@ ALLOWED_ENGLISH_TERMS = {
 }
 
 # Check if the token is purely Japanese
-def is_pure_japanese(token):
-    return all(re.match(r'[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', char) for char in token)
+import re
 
-# Check if token is whitelisted English
-def is_whitelisted_english(token):
-    return token in ALLOWED_ENGLISH_TERMS
+ALLOWED_ENGLISH_TERMS = {"COPD", "NSAIDs", "MRI", "CT", "HbA1c"}
 
-# Check if the token is purely numeric
-def is_numeric(token):
-    return token.isdigit()
+# For Japanese validation (Kana + Common Kanji range)
+JAPANESE_CHAR_PATTERN = r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3000-\u303F]+'
+NUMERIC_PATTERN = r'[0-9]+'
+ENGLISH_PATTERN = r'[a-zA-Z0-9]+'
+
+# Combine patterns into one regex
+COMBINED_PATTERN = f'{JAPANESE_CHAR_PATTERN}|{NUMERIC_PATTERN}|{ENGLISH_PATTERN}'
 
 def is_valid_japanese_question(output: str) -> bool:
-    # Split tokens by word boundaries
-    tokens = re.findall(r'\b\w+\b', output)
+    segments = re.findall(COMBINED_PATTERN, output)
+    invalid_segments = []
 
-    invalid_tokens = []
-
-    for token in tokens:
-        if is_pure_japanese(token):
-            continue
-        elif is_whitelisted_english(token):
-            continue
-        elif is_numeric(token):
-            continue
+    for segment in segments:
+        if re.fullmatch(JAPANESE_CHAR_PATTERN, segment):
+            continue  # valid Japanese
+        elif re.fullmatch(NUMERIC_PATTERN, segment):
+            continue  # valid numeric
+        elif segment in ALLOWED_ENGLISH_TERMS:
+            continue  # valid allowed English term
         else:
-            invalid_tokens.append(token)
+            invalid_segments.append(segment)
 
-    if invalid_tokens:
-        print(f"[WARNING] 不許可の英語／非日本語表現が含まれています: {invalid_tokens}")
+    if invalid_segments:
+        print(f"[WARNING] 不許可の英語／非日本語表現が含まれています: {invalid_segments}")
         return False
 
     return True
+
 
 
 
