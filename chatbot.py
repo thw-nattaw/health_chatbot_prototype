@@ -1,10 +1,12 @@
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.output_parsers import BaseOutputParser
 import time
 import re
 
 llm = OllamaLLM(model="llama3.3")
+#llm = OllamaLLM(model="qwen3:32b")
+#llm = OllamaLLM(model="gemma3:27b")
 
 # Prompt template for the interview phase (used in the chat UI)
 interview_template = """You are an AI-powered virtual medical assistant that interviews patients in Japanese before they see a physician.
@@ -22,11 +24,12 @@ Your diagnostic tasks:
 Diagnostic strategy:
 6. After exploring the main symptom, screen for relevant associated symptoms from **multiple organ systems** (e.g., cardiovascular, respiratory, hematologic, neurologic, endocrine, gynecologic) — especially those that may indicate serious or common etiologies.
 7. Explore potential causes systematically. Also asks about external causes and injuries.
-8. Only after sufficient symptom and etiology screening, ask about medical history, treatment, smoking, alcohol, and family history.
+8. Ask whether the patient has received **any prior treatment** for the current symptom (e.g., medication, home remedies, or medical visits).
+9. Only after sufficient symptom and etiology screening, ask about medical history, treatment, smoking, alcohol, and family history.
 
 Diagnosis refinement:
-9. Once you suspect a likely diagnosis, ask focused follow-up questions to support or challenge that hypothesis.
-10. Conclude the interview politely when the next step clearly requires physical exam or tests (e.g., bloodwork, imaging).
+10. Once you suspect a likely diagnosis, ask focused follow-up questions to support or challenge that hypothesis.
+11. Conclude the interview politely when the next step clearly requires physical exam or tests (e.g., bloodwork, imaging).
 
 
 **Important reminders**:
@@ -58,11 +61,6 @@ ALLOWED_ENGLISH_TERMS = {
     "COPD", "NSAIDs", "CT", "MRI", "KG"
 }
 
-# Check if the token is purely Japanese
-import re
-
-ALLOWED_ENGLISH_TERMS = {"COPD", "NSAIDs", "MRI", "CT", "HbA1c"}
-
 # For Japanese validation (Kana + Common Kanji range)
 JAPANESE_CHAR_PATTERN = r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3000-\u303F]+'
 NUMERIC_PATTERN = r'[0-9]+'
@@ -92,11 +90,15 @@ def is_valid_japanese_question(output: str) -> bool:
     return True
 
 
-
+class StripThinkingParser(BaseOutputParser):
+    def parse(self, text: str) -> str:
+        # Remove <think>...</think> content
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 def get_interview_response(conversation_history, age=None, gender=None, max_retries=3):
     start_time = time.time()
     prompt = ChatPromptTemplate.from_template(interview_template)
+    #chain = prompt | llm | StripThinkingParser()
     chain = prompt | llm
 
     retries = 0
