@@ -4,59 +4,38 @@ from langchain_core.output_parsers import BaseOutputParser
 import time
 import re
 
-llm = OllamaLLM(model="llama3.3")
-#llm = OllamaLLM(model="qwen3:32b")
-#llm = OllamaLLM(model="gemma3:27b")
+llm = OllamaLLM(model="qwen3:32b")
 
-# Prompt template for the interview phase (used in the chat UI)
-interview_template = """You are an AI-powered virtual medical assistant that interviews patients in Japanese before they see a physician.
+detail = "Y"
+dx = "Y"
+think = True
 
-Your highest priority:
-- Your goal is to help identify the **most likely diagnosis** or **diagnostic possibilities**, not just one explanation. Avoid anchoring on the first hypothesis. Stay flexible and broad in your differential reasoning.
+def load_prompt(filename):
+    with open(f"prompts/{filename}.txt", "r", encoding="utf-8") as f:
+        return f.read()
 
-Your diagnostic tasks:
-1. Identify and clarify the patient's chief complaint.
-2. Collect detailed symptom information (onset, location, characteristics, severity, context, modifying factors).
-3. If the onset (in days/weeks/months/years) is unclear, ask about it first.
-4. Ask only one question at a time.
-5. If the condition is emergency and requires immediate treatment, for examples, suspecting stroke or myocardial infarction, ask only relevant questions quickly and end conversation.
+def get_prompt(detail, dx, think):
+    # Determine which prompt to use
+    if detail == "N" and dx == "N":
+        prompt_name = "prompt1"
+    elif detail == "Y" and dx == "N":
+        prompt_name = "prompt2"
+    elif detail == "N" and dx == "Y":
+        prompt_name = "prompt3"
+    elif detail == "Y" and dx == "Y":
+        prompt_name = "prompt4"
+    else:
+        raise ValueError("Invalid combination of A and B")
 
-Diagnostic strategy:
-6. After exploring the main symptom, screen for relevant associated symptoms from **multiple organ systems** (e.g., cardiovascular, respiratory, hematologic, neurologic, endocrine, gynecologic) — especially those that may indicate serious or common etiologies.
-7. Explore potential causes systematically. Also asks about external causes and injuries.
-8. Ask whether the patient has received **any prior treatment** for the current symptom (e.g., medication, home remedies, or medical visits).
-9. Only after sufficient symptom and etiology screening, ask about medical history, treatment, smoking, alcohol, and family history.
+    prompt = load_prompt(prompt_name)
 
-Diagnosis refinement:
-10. Once you suspect a likely diagnosis, ask focused follow-up questions to support or challenge that hypothesis.
-11. Conclude the interview politely when the next step clearly requires physical exam or tests (e.g., bloodwork, imaging).
+    if not think:
+        prompt += "\n/no_think"
 
+    return prompt
 
-**Important reminders**:
-- Do not stop at one plausible cause — collect enough information to confirm or rule out multiple potential diagnoses.
-- Always consider common, treatable, or serious conditions that may present subtly.
-- Please do not include any thought processes other than the question (例：「〜が考えられます」「〜の可能性があります」など）
-- Avoid re-checking the same system multiple times unless there's a new angle.
+interview_prompt = get_prompt(detail, dx, think)
 
-Patient Information:
-- 年齢: {age}歳
-- 性別: {gender}
-
-Patient Interview Transcript:
-{conversation_history}
-"""
-
-
-
-# Prompt for generating summary from conversation
-summary_template = """
-You are a Japanese medical assistant tasked with summarizing a patient interview.
-
-Given the following conversation between the patient and AI assistant, generate a History of Present Illness in the medical records、in Japanese Language.
-
-Conversation:
-{conversation_history}
-"""
 ALLOWED_ENGLISH_TERMS = {
     "COPD", "NSAIDs", "CT", "MRI", "KG"
 }
@@ -90,16 +69,23 @@ def is_valid_japanese_question(output: str) -> bool:
     return True
 
 
-class StripThinkingParser(BaseOutputParser):
+class StripThinkingParserWithLogging(BaseOutputParser):
     def parse(self, text: str) -> str:
-        # Remove <think>...</think> content
+        # Extract <think> part (if exists)
+        match = re.search(r"<think>(.*?)</think>", text, flags=re.DOTALL)
+        if match:
+            thought = match.group(1).strip()
+            print("MODEL THOUGHT:\n", thought)
+        else:
+            print("MODEL THOUGHT: (None found)")
+        
+        # Return only the visible output
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 def get_interview_response(conversation_history, age=None, gender=None, max_retries=3):
     start_time = time.time()
-    prompt = ChatPromptTemplate.from_template(interview_template)
-    #chain = prompt | llm | StripThinkingParser()
-    chain = prompt | llm
+    prompt = ChatPromptTemplate.from_template(interview_prompt)
+    chain = prompt | llm | StripThinkingParserWithLogging()
 
     retries = 0
     question_output = ""
@@ -120,6 +106,18 @@ def get_interview_response(conversation_history, age=None, gender=None, max_retr
     return question_output
 
 
+
+
+
+# Prompt for generating summary from conversation
+summary_template = """
+You are a Japanese medical assistant tasked with summarizing a patient interview.
+
+Given the following conversation between the patient and AI assistant, generate a History of Present Illness in the medical records、in Japanese Language.
+
+Conversation:
+{conversation_history}
+"""
 
 def summarize_conversation(conversation_history: str) -> str:
     """Generate a summary from the patient-AI conversation"""
