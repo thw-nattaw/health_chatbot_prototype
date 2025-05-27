@@ -5,8 +5,6 @@ import time
 import re
 
 llm = OllamaLLM(model="llama3.3")
-#llm = OllamaLLM(model="qwen3:32b")
-#llm = OllamaLLM(model="gemma3:27b")
 
 # Prompt template for the interview phase (used in the chat UI)
 interview_template = """You are an AI-powered virtual medical assistant that interviews patients in Japanese before they see a physician.
@@ -88,12 +86,6 @@ def is_valid_japanese_question(output: str) -> bool:
         return False
 
     return True
-
-
-class StripThinkingParser(BaseOutputParser):
-    def parse(self, text: str) -> str:
-        # Remove <think>...</think> content
-        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 def get_interview_response(conversation_history, age=None, gender=None, max_retries=3):
     start_time = time.time()
