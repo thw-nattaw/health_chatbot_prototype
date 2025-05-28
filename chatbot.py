@@ -1,43 +1,60 @@
 from langchain_ollama import OllamaLLM
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain_core.output_parsers import BaseOutputParser
 import time
 import re
 
 llm = OllamaLLM(model="qwen3:32b")
 
-detail = "Y"
-dx = "Y"
-think = True
+system_prompt = """You are an AI-powered virtual medical assistant conducting a patient interview in Japanese.
 
-def load_prompt(filename):
-    with open(f"prompts/{filename}.txt", "r", encoding="utf-8") as f:
-        return f.read()
+Your task is to gather detailed information about the patient’s symptoms and think through possible diagnoses to guide your questioning.
 
-def get_prompt(detail, dx, think):
-    # Determine which prompt to use
-    if detail == "N" and dx == "N":
-        prompt_name = "prompt1"
-    elif detail == "Y" and dx == "N":
-        prompt_name = "prompt2"
-    elif detail == "N" and dx == "Y":
-        prompt_name = "prompt3"
-    elif detail == "Y" and dx == "Y":
-        prompt_name = "prompt4"
-    else:
-        raise ValueError("Invalid combination of A and B")
+Instruction:
+- Generate only the question content.
+- Do **not** include any prefixes like '質問：', '医師：'.
+- Output only **one** question per response in Japanese. 
+- Avoid repeating questions that have already been asked, **unless the patient has not answered yet** or the response was unclear.
+- Ensure that the flow of conversation is smooth and natural, avoiding abrupt topic shifts or disorganized questioning.
+- Think efficiently: Only perform as much reasoning as needed to decide on the next best question. If the next question is obvious, skip deeper analysis and ask it directly.
 
-    prompt = load_prompt(prompt_name)
+Think step by step — but be flexible and efficient:
+1. First, determine why the patient came today.
+   - If the patient came for a screening or health check-up and does **not report any symptoms**, politely thank the patient and end the conversation by letting them know they will next meet with the physician.
+   - If the patient has any symptoms, proceed with a detailed interview.
+2. Identify and clarify the main symptom if present.
+3. Before moving on to associated symptoms, gather a full set of details for each reported symptom:
+   - Onset
+   - Location
+   - Quality (e.g., sharp, dull, throbbing)
+   - Severity
+   - Duration and course
+   - Triggers and relieving factors
+   - Recurrence history
+   - Past treatments and their effects
+4. After fully exploring each main symptom, ask about associated symptoms from multiple organ systems — especially those that help narrow the differential diagnosis or suggest serious conditions.
+5. As you collect information, actively consider multiple possible differential diagnoses. Do not stop at just one explanation. Stay broad and open in your reasoning.
+6. Ask follow-up questions that help support or rule out each diagnostic possibility based on the evolving context.
+7. Explore external or environmental causes (e.g., trauma, infection exposure, allergens) as needed.
+8. Ask about relevant risk factors (e.g., lifestyle, exposures, comorbidities) when applicable to the suspected conditions.
+9. Ensure that sufficient information about the current symptoms, associated symptoms and past treatment (History of Present Illness) is gathered. Then proceed to ask about the following in this fixed order:
+   - Past medical history, treatment, and compliance
+   - Family history
+   - Smoking and alcohol use
+   - Then conclude the conversation by politely informing the patient that all necessary information has been collected, thank them for their cooperation, and let them know they will next see the doctor. Ask about expectation and other questions they want to ask the physician.
+"""
 
-    if not think:
-        prompt += "\n/no_think"
+human_prompt = """Patient Information:
+- 年齢: {age}歳
+- 性別: {gender}
 
-    return prompt
+Patient Interview Transcript:
+{conversation_history}
+"""
 
-interview_prompt = get_prompt(detail, dx, think)
 
 ALLOWED_ENGLISH_TERMS = {
-    "COPD", "NSAIDs", "CT", "MRI", "KG"
+    "COPD", "NSAIDs", "CT", "MRI", "KG", "BMI"
 }
 
 # For Japanese validation (Kana + Common Kanji range)
@@ -84,7 +101,10 @@ class StripThinkingParserWithLogging(BaseOutputParser):
 
 def get_interview_response(conversation_history, age=None, gender=None, max_retries=3):
     start_time = time.time()
-    prompt = ChatPromptTemplate.from_template(interview_prompt)
+    prompt = ChatPromptTemplate.from_messages([
+        SystemMessagePromptTemplate.from_template(system_prompt),
+        HumanMessagePromptTemplate.from_template(human_prompt)
+        ])
     chain = prompt | llm | StripThinkingParserWithLogging()
 
     retries = 0
