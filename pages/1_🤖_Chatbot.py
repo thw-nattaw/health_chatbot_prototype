@@ -26,38 +26,71 @@ if not st.session_state.submitted_basic_info:
 
     if st.button("チャットを開始する"):
         st.session_state.submitted_basic_info = True
-    st.stop()  # Don't run chat section until info is submitted
+        if len(st.session_state.conversation) == 0:
+            st.session_state.conversation.append({
+                "role": "assistant",
+                "content": "本日どのような症状がありますか？"
+            })
+        st.rerun()  # Immediately rerun to load chat UI
 
-# --- Step 2: Display chat history ---
-for entry in st.session_state.conversation:
-    with st.chat_message(entry["role"]):
-        st.markdown(entry["content"])
+else:
+    # --- Step 2: Display chat history ---
+    for entry in st.session_state.conversation:
+        with st.chat_message(entry["role"]):
+            st.markdown(entry["content"])
 
-# --- Step 3: Chat input area ---
-if not st.session_state.end_conversation:
-    user_input = st.chat_input("Describe your symptoms here...")
+    # --- Step 3: Chat input area ---
+    if not st.session_state.end_conversation:
+        user_input = st.chat_input("症状を入力してください...")
 
-    if user_input:
-        st.session_state.conversation.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
+        if user_input:
+            st.session_state.conversation.append({"role": "user", "content": user_input})
+            with st.chat_message("user"):
+                st.markdown(user_input)
 
-        st.session_state.i += 1
-        print(st.session_state.i)
+            st.session_state.i += 1
 
-        full_history = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.conversation])
-        ai_response = get_interview_response(
-            full_history,
-            age=st.session_state.age,
-            gender=st.session_state.gender
-        )
+            # --- Condition 1: Max turns reached (30 messages) ---
+            if len(st.session_state.conversation) >= 30:
+                st.session_state.end_conversation = True
+                st.session_state.conversation.append({
+                    "role": "assistant",
+                    "content": "ご協力ありがとうございました。次は医師の診察になります。"
+                })
+                st.rerun()
 
-        st.session_state.conversation.append({"role": "assistant", "content": ai_response})
-        with st.chat_message("assistant"):
-            st.markdown(ai_response)
+            else:
+                # --- Generate LLM response ---
+                full_history = "\n".join(
+                    [f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.conversation]
+                )
+                ai_response = get_interview_response(
+                    full_history,
+                    age=st.session_state.age,
+                    gender=st.session_state.gender
+                )
 
-# --- Step 4: End interview button ---
-if st.button("End Interview"):
-    st.session_state.end_conversation = True
-    full_convo = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.conversation])
-    st.success("Interview ended. Go to the Summary page.")
+                # --- Condition 2: End-phrases from model ---
+                END_PHRASES = [
+                    "医師にお伝えします",
+                    "次は医師にご相談ください",
+                    "これでインタビューを終了します",
+                    "医師に見せる内容をまとめます"
+                ]
+                if any(phrase in ai_response for phrase in END_PHRASES):
+                    st.session_state.end_conversation = True
+                    st.session_state.conversation.append({
+                        "role": "assistant",
+                        "content": "ご協力ありがとうございました。次は医師の診察になります。"
+                    })
+                    st.rerun()
+                else:
+                    st.session_state.conversation.append({"role": "assistant", "content": ai_response})
+                    with st.chat_message("assistant"):
+                        st.markdown(ai_response)
+
+    # --- Step 4: End interview button ---
+    if st.button("End Interview"):
+        st.session_state.end_conversation = True
+        full_convo = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.conversation])
+        st.success("インタビューが終了しました。サマリーページへ進んでください。")

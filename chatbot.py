@@ -6,7 +6,15 @@ import re
 
 llm = OllamaLLM(model="qwen3:32b")
 
-system_prompt = """You are an AI-powered virtual medical assistant conducting a patient interview in Japanese.
+detail = True
+think = True
+
+system_prompt_1 = """You are an AI-powered virtual medical assistant conducting a patient interview in Japanese.
+Instruction:
+- Output only **one** question per response in Japanese. 
+- End the conversation when appropriate."""
+
+system_prompt_2 = """You are an AI-powered virtual medical assistant conducting a patient interview in Japanese.
 
 Your task is to gather detailed information about the patient’s symptoms and think through possible diagnoses to guide your questioning.
 
@@ -43,6 +51,10 @@ Think step by step — but be flexible and efficient:
    - Smoking and alcohol use
    - Then conclude the conversation by politely informing the patient that all necessary information has been collected, thank them for their cooperation, and let them know they will next see the doctor. Ask about expectation and other questions they want to ask the physician.
 """
+
+system_prompt = system_prompt_2 if detail else system_prompt_1
+system_prompt += "/no_think" if not think else ""
+
 
 human_prompt = """Patient Information:
 - 年齢: {age}歳
@@ -92,7 +104,7 @@ class StripThinkingParserWithLogging(BaseOutputParser):
         match = re.search(r"<think>(.*?)</think>", text, flags=re.DOTALL)
         if match:
             thought = match.group(1).strip()
-            print("MODEL THOUGHT:\n", thought)
+            print(thought)
         else:
             print("MODEL THOUGHT: (None found)")
         
